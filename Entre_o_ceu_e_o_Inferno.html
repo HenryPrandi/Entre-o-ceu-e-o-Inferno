@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Protótipo 2D — Avatar do Purgatório</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600;700&display=swap');
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #09090d;
+      color: #f4f4f6;
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+    }
+    .font-cinzel {
+      font-family: 'Cinzel', serif;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body class="relative w-screen h-screen flex flex-col">
+
+  <!-- Barra Superior de Controle e Testes Rápidos -->
+  <div class="h-12 bg-zinc-950/90 border-b border-zinc-800 px-4 flex items-center justify-between z-20 text-xs">
+    <div class="flex items-center gap-3">
+      <span class="font-cinzel font-bold text-sm text-amber-300 tracking-wider">AVATAR DO PURGATÓRIO</span>
+      <span id="zone-badge" class="px-2.5 py-0.5 rounded-full bg-purple-950 text-purple-200 border border-purple-700 font-semibold">
+        Zona: Purgatório (Centro)
+      </span>
+    </div>
+
+    <!-- Atalhos de Desenvolvedor (Para testar sem frustração) -->
+    <div class="flex items-center gap-2">
+      <span class="text-zinc-400 hidden md:inline">Ferramentas de Teste:</span>
+      <button onclick="teleportTo('purgatory')" class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition">
+        Ir: Purgatório
+      </button>
+      <button onclick="teleportTo('heaven_boss')" class="px-2 py-1 rounded bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-700/60 transition">
+        Ir: Chefe do Céu ↑
+      </button>
+      <button onclick="teleportTo('hell_boss')" class="px-2 py-1 rounded bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-700/60 transition">
+        Ir: Chefe do Inferno ↓
+      </button>
+      <button onclick="grantTestPoint()" class="px-2 py-1 rounded bg-indigo-950 hover:bg-indigo-900 text-indigo-200 border border-indigo-700 transition">
+        +1 Ponto Skill
+      </button>
+      <button onclick="toggleSkillTree()" class="px-2.5 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-semibold transition flex items-center gap-1">
+        <span>Árvore de Skills (T)</span>
+        <span id="skill-point-badge" class="bg-black/40 px-1.5 rounded text-emerald-200">0</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Área do Jogo -->
+  <div class="relative flex-1 w-full h-full overflow-hidden">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD de Vida, Energia e Controles -->
+    <div class="absolute top-4 left-4 pointer-events-none flex flex-col gap-2 z-10">
+      <div class="bg-zinc-950/85 border border-zinc-800 p-3 rounded-lg backdrop-blur-sm w-64 shadow-xl">
+        <div class="flex justify-between text-xs mb-1">
+          <span class="font-semibold text-zinc-300">VIDA DO AVATAR</span>
+          <span id="hp-text" class="text-rose-400 font-bold">100 / 100</span>
+        </div>
+        <div class="w-full h-3 bg-zinc-800 rounded-full overflow-hidden mb-2.5">
+          <div id="hp-bar" class="h-full bg-gradient-to-r from-rose-600 to-rose-400 transition-all duration-150" style="width: 100%"></div>
+        </div>
+
+        <div class="flex justify-between text-xs mb-1">
+          <span class="font-semibold text-zinc-300">CARGA: DUPLO SOCO</span>
+          <span id="special-text" class="text-cyan-300 font-bold">PRONTO</span>
+        </div>
+        <div class="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+          <div id="special-bar" class="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all duration-75" style="width: 100%"></div>
+        </div>
+
+        <div class="mt-3 pt-2 border-t border-zinc-800/80 flex justify-between text-[11px] text-zinc-400">
+          <span>Chefes Derrotados: <strong id="boss-count" class="text-amber-300">0 / 2 (Demo)</strong></span>
+          <span>Salvo em: <strong id="save-name" class="text-purple-300">Altar Central</strong></span>
+        </div>
+      </div>
+
+      <!-- Guia de Controles na Tela -->
+      <div class="bg-zinc-950/80 border border-zinc-800/80 p-2.5 rounded-lg text-[11px] text-zinc-300 space-y-1 w-64">
+        <div class="font-bold text-amber-300 mb-1">CONTROLES DO PROTÓTIPO:</div>
+        <div><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">A</kbd> <kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">D</kbd> ou <kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">←</kbd> <kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">→</kbd> : Andar</div>
+        <div><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">W</kbd> / <kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">Espaço</kbd> : Pular (Pule na parede!)</div>
+        <div><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">Shift</kbd> ou <kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">Z</kbd> : Dash (Esquiva Invencível)</div>
+        <div><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">J</kbd> ou <kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">X</kbd> : Espada Básica</div>
+        <div><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-cyan-300 font-bold">K</kbd> ou <kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-cyan-300 font-bold">C</kbd> : <strong>Duplo Soco Gigante</strong></div>
+        <div id="ranged-control-hint" class="hidden text-emerald-300"><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">L</kbd> ou <kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-white">V</kbd> : Tiro Etéreo / Magia (Skill)</div>
+        <div><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-amber-300">E</kbd> : Interagir com o "Anjo" / Altar</div>
+      </div>
+    </div>
+
+    <!-- Barra de Vida do Chefe (Aparece nas Arenas) -->
+    <div id="boss-hud" class="hidden absolute top-6 left-1/2 -translate-x-1/2 w-[480px] max-w-[90vw] bg-zinc-950/90 border border-zinc-700 p-3 rounded-xl shadow-2xl z-10 pointer-events-none">
+      <div class="flex justify-between items-center mb-1.5">
+        <span id="boss-name" class="font-cinzel font-bold text-base tracking-wider text-amber-300">URIEL, O OLHO DO JUÍZO (1º DEUS)</span>
+        <span id="boss-hp-text" class="text-xs text-zinc-400">300 / 300</span>
+      </div>
+      <div class="w-full h-3.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+        <div id="boss-hp-bar" class="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 transition-all duration-100" style="width: 100%"></div>
+      </div>
+    </div>
+
+    <!-- Caixa de Diálogo / Memória de Guerra -->
+    <div id="dialogue-modal" class="hidden absolute bottom-6 left-1/2 -translate-x-1/2 w-[680px] max-w-[92vw] bg-zinc-950/95 border-2 border-purple-500/70 rounded-xl p-5 shadow-2xl z-30">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div id="dialogue-speaker" class="font-cinzel font-bold text-sm uppercase tracking-widest text-purple-300 mb-1">
+            O "Anjo" Aprisionado (A Deusa)
+          </div>
+          <p id="dialogue-text" class="text-sm text-zinc-200 leading-relaxed"></p>
+        </div>
+      </div>
+      <div class="mt-4 flex justify-end">
+        <button onclick="nextDialogue()" class="px-4 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-xs font-semibold rounded-lg transition">
+          Continuar (Espaço / Clique) →
+        </button>
+      </div>
+    </div>
+
+    <!-- Modal da Árvore de Habilidades Limitada -->
+    <div id="skill-modal" class="hidden absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-40 p-4">
+      <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl">
+        <div class="flex justify-between items-center pb-4 border-b border-zinc-800">
+          <div>
+            <h2 class="font-cinzel font-bold text-xl text-amber-300">ÁRVORE DE HABILIDADES DO AVATAR</h2>
+            <p class="text-xs text-zinc-400 mt-0.5">A árvore é limitada: escolha seu caminho com sabedoria a cada Chefe derrotado.</p>
+          </div>
+          <div class="text-right">
+            <span class="text-xs text-zinc-400 block">Essências Divinas (Pontos)</span>
+            <span id="modal-skill-points" class="text-2xl font-bold text-emerald-400">0</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-5">
+          <!-- Skill 1: Tiro à Distância -->
+          <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center">
+                <h3 class="font-bold text-sm text-cyan-300">1. Disparo Etéreo (Tiro)</h3>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">Custo: 1 Ponto</span>
+              </div>
+              <p class="text-xs text-zinc-400 mt-2">
+                Permite disparar projéteis de luz com <kbd class="px-1 bg-zinc-800 text-white rounded">L</kbd> ou <kbd class="px-1 bg-zinc-800 text-white rounded">V</kbd> para atingir Deuses e Demônios à distância.
+              </p>
+            </div>
+            <button id="btn-skill-shot" onclick="unlockSkill('shot')" class="mt-4 w-full py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition">
+              Desbloquear Habilidade
+            </button>
+          </div>
+
+          <!-- Skill 2: Punhos Titânicos -->
+          <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center">
+                <h3 class="font-bold text-sm text-amber-300">2. Punhos da Valquíria</h3>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">Custo: 1 Ponto</span>
+              </div>
+              <p class="text-xs text-zinc-400 mt-2">
+                Evolui o seu <strong>Duplo Soco Gigante</strong>: aumenta o tamanho dos punhos espectrais, causa +60% de dano e reduz a recarga.
+              </p>
+            </div>
+            <button id="btn-skill-fists" onclick="unlockSkill('fists')" class="mt-4 w-full py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition">
+              Desbloquear Habilidade
+            </button>
+          </div>
+
+          <!-- Skill 3: Magia Explosiva -->
+          <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center">
+                <h3 class="font-bold text-sm text-purple-300">3. Magia: Lança do Martírio</h3>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">Custo: 1 Ponto</span>
+              </div>
+              <p class="text-xs text-zinc-400 mt-2">
+                Transforma o ataque à distância (<kbd class="px-1 bg-zinc-800 text-white rounded">L</kbd> / <kbd class="px-1 bg-zinc-800 text-white rounded">V</kbd>) em uma lança mágica perfurante que atravessa inimigos.
+              </p>
+            </div>
+            <button id="btn-skill-magic" onclick="unlockSkill('magic')" class="mt-4 w-full py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition">
+              Desbloquear Habilidade
+            </button>
+          </div>
+
+          <!-- Skill 4: Asas de Cinza (Pulo Duplo) -->
+          <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center">
+                <h3 class="font-bold text-sm text-rose-300">4. Passo Celestial (Pulo Duplo)</h3>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">Custo: 1 Ponto</span>
+              </div>
+              <p class="text-xs text-zinc-400 mt-2">
+                Concede um Pulo Extra no ar e aumenta a velocidade de ataque da sua Espada Básica em 35%.
+              </p>
+            </div>
+            <button id="btn-skill-wings" onclick="unlockSkill('wings')" class="mt-4 w-full py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition">
+              Desbloquear Habilidade
+            </button>
+          </div>
+        </div>
+
+        <div class="flex justify-end">
+          <button onclick="toggleSkillTree()" class="px-5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold">
+            Fechar (T / Esc)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // ==========================================
+    // GEOGRAFIA VERTICAL DO MUNDO
+    // y: 0 a 1700      -> O CÉU (Renascentista / Olhos a Laser / Chefe Deus no topo)
+    // y: 1700 a 2500   -> O PURGATÓRIO (Centro Seguro / Altar / O "Anjo" Manipulador)
+    // y: 2500 a 4200   -> O INFERNO (Gótico / Espinhos de Tridente / Chefe Demônio no fundo)
+    // ==========================================
+    const WORLD_WIDTH = 1200;
+    const PURGATORY_Y = 2150;
+
+    // Estado da Protagonista (Avatar)
+    const player = {
+      x: 580,
+      y: PURGATORY_Y - 60,
+      w: 28,
+      h: 46,
+      vx: 0,
+      vy: 0,
+      facing: 1,
+      hp: 100,
+      maxHp: 100,
+      onGround: false,
+      onWall: 0, // -1 esquerda, 1 direita
+      jumpsLeft: 1,
+      dashCooldown: 0,
+      dashTime: 0,
+      invulnTime: 0,
+      swordTime: 0,
+      swordCooldown: 0,
+      specialTime: 0,
+      specialCooldown: 0,
+      rangedCooldown: 0,
+      saveX: 580,
+      saveY: PURGATORY_Y - 60,
+      saveName: 'Altar do Purgatório',
+      skillPoints: 0,
+      skills: {
+        shot: false,
+        fists: false,
+        magic: false,
+        wings: false
+      }
+    };
+
+    // Plataformas do Mundo Vertical
+    const platforms = [
+      // Paredes Limites Laterais do Mundo
+      { x: 0, y: 0, w: 40, h: 4300, type: 'wall' },
+      { x: WORLD_WIDTH - 40, y: 0, w: 40, h: 4300, type: 'wall' },
+
+      // === PURGATÓRIO (HUB CENTRAL: y = 1750 a 2400) ===
+      { x: 220, y: 2150, w: 760, h: 40, type: 'purgatory' }, // Chão Principal do Purgatório
+      { x: 40, y: 2020, w: 160, h: 24, type: 'purgatory' },
+      { x: 1000, y: 2020, w: 160, h: 24, type: 'purgatory' },
+      { x: 460, y: 1960, w: 280, h: 24, type: 'purgatory' }, // Degrau para subir ao Céu
+      { x: 220, y: 1820, w: 220, h: 24, type: 'purgatory' },
+      { x: 760, y: 1820, w: 220, h: 24, type: 'purgatory' },
+
+      // === SUBIDA PARA O CÉU (y = 550 a 1700) ===
+      { x: 480, y: 1680, w: 240, h: 24, type: 'heaven' },
+      { x: 180, y: 1540, w: 220, h: 24, type: 'heaven' },
+      { x: 800, y: 1540, w: 220, h: 24, type: 'heaven' },
+      { x: 470, y: 1400, w: 260, h: 24, type: 'heaven' }, // Sombra contra laser
+      { x: 140, y: 1260, w: 220, h: 24, type: 'heaven' },
+      { x: 840, y: 1260, w: 220, h: 24, type: 'heaven' },
+      { x: 450, y: 1120, w: 300, h: 24, type: 'heaven' },
+      { x: 200, y: 970, w: 220, h: 24, type: 'heaven' },
+      { x: 780, y: 970, w: 220, h: 24, type: 'heaven' },
+      { x: 480, y: 830, w: 240, h: 24, type: 'heaven' },
+      { x: 180, y: 690, w: 200, h: 24, type: 'heaven' },
+      { x: 820, y: 690, w: 200, h: 24, type: 'heaven' },
+
+      // === ARENA DO CHEFE DO CÉU (y = 520) ===
+      { x: 80, y: 540, w: 1040, h: 35, type: 'heaven_arena' },
+      { x: 220, y: 390, w: 180, h: 20, type: 'heaven' },
+      { x: 800, y: 390, w: 180, h: 20, type: 'heaven' },
+
+      // === DESCIDA PARA O INFERNO (y = 2300 a 3600) ===
+      { x: 40, y: 2320, w: 250, h: 24, type: 'hell' },
+      { x: 910, y: 2320, w: 250, h: 24, type: 'hell' },
+      { x: 420, y: 2500, w: 360, h: 26, type: 'hell' },
+      { x: 140, y: 2680, w: 240, h: 24, type: 'hell' },
+      { x: 820, y: 2680, w: 240, h: 24, type: 'hell' },
+      { x: 460, y: 2860, w: 280, h: 24, type: 'hell' },
+      { x: 180, y: 3040, w: 240, h: 24, type: 'hell' },
+      { x: 780, y: 3040, w: 240, h: 24, type: 'hell' },
+      { x: 450, y: 3220, w: 300, h: 24, type: 'hell' },
+      { x: 160, y: 3400, w: 240, h: 24, type: 'hell' },
+      { x: 800, y: 3400, w: 240, h: 24, type: 'hell' },
+
+      // === ARENA DO CHEFE DO INFERNO (y = 3780) ===
+      { x: 120, y: 3780, w: 960, h: 40, type: 'hell_arena' },
+      { x: 240, y: 3630, w: 180, h: 20, type: 'hell' },
+      { x: 780, y: 3630, w: 180, h: 20, type: 'hell' }
+    ];
+
+    // Pontos de Salvamento (Estilo Bancos de Hollow Knight)
+    const altars = [
+      { x: 520, y: 2150, name: 'Altar do Purgatório' },
+      { x: 540, y: 830, name: 'Altar do Coro Celestial' },
+      { x: 540, y: 3220, name: 'Altar da Fenda Gótica' }
+    ];
+
+    // Obstáculos do Céu: Olhos Angelicais que disparam Lasers
+    const angelicEyes = [
+      { x: 110, y: 1470, timer: 20, cycle: 170, aimX: 600, aimY: 1540 },
+      { x: 1090, y: 1190, timer: 90, cycle: 170, aimX: 600, aimY: 1260 },
+      { x: 110, y: 900, timer: 45, cycle: 160, aimX: 600, aimY: 970 },
+      { x: 1090, y: 740, timer: 110, cycle: 160, aimX: 600, aimY: 830 }
+    ];
+
+    // Obstáculos do Inferno: Espinhos de Tridente nas paredes/pisos e Lava no fundo
+    const tridentSpikes = [
+      { x: 40, y: 2540, w: 28, h: 110, side: 'left' },
+      { x: WORLD_WIDTH - 68, y: 2540, w: 28, h: 110, side: 'right' },
+      { x: 550, y: 2482, w: 100, h: 18, side: 'top' },
+      { x: 40, y: 2890, w: 28, h: 120, side: 'left' },
+      { x: WORLD_WIDTH - 68, y: 2890, w: 28, h: 120, side: 'right' },
+      { x: 550, y: 3202, w: 100, h: 18, side: 'top' },
+      { x: 40, y: 3440, w: 28, h: 130, side: 'left' },
+      { x: WORLD_WIDTH - 68, y: 3440, w: 28, h: 130, side: 'right' }
+    ];
+    const LAVA_Y = 3920;
+
+    // Os Chefes (1 Deus no Céu e 1 Demônio no Inferno para o Protótipo)
+    const bosses = {
+      heaven: {
+        id: 'heaven',
+        name: 'URIEL, O OLHO DO JUÍZO (1º DEUS)',
+        x: 600,
+        y: 340,
+        w: 76,
+        h: 76,
+        hp: 320,
+        maxHp: 320,
+        alive: true,
+        engaged: false,
+        introShown: false,
+        timer: 0,
+        vx: 2.5,
+        laserWarning: 0,
+        targetX: 600,
+        targetY: 500
+      },
+      hell: {
+        id: 'hell',
+        name: 'MALPHAS, O TRIDENTE DE SANGUE (1º DEMÔNIO)',
+        x: 750,
+        y: 3710,
+        w: 64,
+        h: 70,
+        hp: 350,
+        maxHp: 350,
+        alive: true,
+        engaged: false,
+        introShown: false,
+        timer: 0,
+        vx: 0,
+        vy: 0,
+        state: 'idle'
+      }
+    };
+
+    // Projéteis, Partículas e Efeitos Visuais
+    const projectiles = [];
+    const particles = [];
+    let screenShake = 0;
+
+    // Sistema de Diálogos e Memórias da 2ª Guerra Mundial
+    let dialogueQueue = [];
+    let dialogueActive = false;
+
+    function startDialogue(lines) {
+      dialogueQueue = [...lines];
+      dialogueActive = true;
+      showCurrentDialogue();
+    }
+
+    function showCurrentDialogue() {
+      const modal = document.getElementById('dialogue-modal');
+      if (dialogueQueue.length === 0) {
+        dialogueActive = false;
+        modal.classList.add('hidden');
+        return;
+      }
+      const current = dialogueQueue[0];
+      document.getElementById('dialogue-speaker').textContent = current.speaker;
+      document.getElementById('dialogue-speaker').className = `font-cinzel font-bold text-sm uppercase tracking-widest mb-1 ${current.color || 'text-purple-300'}`;
+      document.getElementById('dialogue-text').textContent = current.text;
+      modal.classList.remove('hidden');
+    }
+
+    function nextDialogue() {
+      if (!dialogueActive) return;
+      dialogueQueue.shift();
+      showCurrentDialogue();
+    }
+
+    // Diálogo Inicial no Purgatório
+    setTimeout(() => {
+      startDialogue([
+        {
+          speaker: 'O "Anjo" Aprisionado (A Deusa)',
+          color: 'text-purple-300',
+          text: '“Você finalmente despertou, minha nobre guerreira... Eu vi como você entregou sua vida naquela guerra humana para salvar inocentes dos soldados nazistas.”'
+        },
+        {
+          speaker: 'O "Anjo" Aprisionado (A Deusa)',
+          color: 'text-purple-300',
+          text: '“Eu sou um Anjo da Guarda aprisionado por 4 Deuses cruéis no Céu (acima) e 4 Demônios no Inferno (abaixo). Eu lhe concedo os Punhos Espectrais do meu Avatar. Derrote os guardiões na ordem que desejar e me liberte!”'
+        }
+      ]);
+    }, 400);
+
+    // Controles de Teclado
+    const keys = {};
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      keys[k] = true;
+
+      if (dialogueActive && (k === ' ' || k === 'enter' || k === 'e')) {
+        e.preventDefault();
+        nextDialogue();
+        return;
+      }
+
+      if (k === 't') {
+        toggleSkillTree();
+        return;
+      }
+      if (k === 'escape' && !document.getElementById('skill-modal').classList.contains('hidden')) {
+        toggleSkillTree();
+        return;
+      }
+
+      // Pulo
+      if ((k === 'w' || k === ' ' || k === 'arrowup') && !dialogueActive) {
+        e.preventDefault();
+        tryJump();
+      }
+
+      // Dash
+      if ((k === 'shift' || k === 'z') && !dialogueActive) {
+        tryDash();
+      }
+
+      // Espada Básica
+      if ((k === 'j' || k === 'x') && !dialogueActive) {
+        trySword();
+      }
+
+      // Duplo Soco Gigante (Especial que sai das costas)
+      if ((k === 'k' || k === 'c') && !dialogueActive) {
+        tryGiantDoublePunch();
+      }
+
+      // Tiro / Magia (Desbloqueável na Skill Tree)
+      if ((k === 'l' || k === 'v') && !dialogueActive) {
+        tryRangedAttack();
+      }
+
+      // Interagir no Purgatório / Altares
+      if (k === 'e' && !dialogueActive) {
+        tryInteract();
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    function tryJump() {
+      if (player.onGround) {
+        player.vy = -13.2;
+        player.onGround = false;
+        createParticles(player.x + player.w / 2, player.y + player.h, '#e4e4e7', 8);
+      } else if (player.onWall !== 0) {
+        // Wall Jump (Pulo na parede estilo Hollow Knight / Nine Sols)
+        player.vy = -12.5;
+        player.vx = -player.onWall * 9.5;
+        player.facing = -player.onWall;
+        createParticles(player.x + (player.onWall > 0 ? player.w : 0), player.y + player.h / 2, '#f4f4f5', 10);
+      } else if (player.jumpsLeft > 0) {
+        player.vy = -12.2;
+        player.jumpsLeft--;
+        createParticles(player.x + player.w / 2, player.y + player.h, '#f43f5e', 12);
+      }
+    }
+
+    function tryDash() {
+      if (player.dashCooldown <= 0 && player.dashTime <= 0) {
+        player.dashTime = 11;
+        player.dashCooldown = player.skills.wings ? 28 : 42;
+        player.invulnTime = Math.max(player.invulnTime, 15);
+        player.vy = 0;
+        player.vx = player.facing * 15;
+        createParticles(player.x + player.w / 2, player.y + player.h / 2, '#a855f7', 14);
+      }
+    }
+
+    function trySword() {
+      if (player.swordCooldown <= 0) {
+        player.swordTime = 10;
+        player.swordCooldown = player.skills.wings ? 14 : 21;
+
+        // Hitbox do corte de espada
+        const slashX = player.facing > 0 ? player.x + player.w : player.x - 58;
+        const slashY = player.y - 6;
+        const slashW = 58;
+        const slashH = player.h + 12;
+
+        checkAttackHit(slashX, slashY, slashW, slashH, 22, '#f8fafc');
+      }
+    }
+
+    // ATAQUE ESPECIAL INICIAL: Duplo Soco Gigante que sai das costas da protagonista!
+    function tryGiantDoublePunch() {
+      if (player.specialCooldown <= 0) {
+        player.specialTime = 22;
+        player.specialCooldown = player.skills.fists ? 95 : 150;
+        screenShake = player.skills.fists ? 14 : 9;
+
+        const reach = player.skills.fists ? 165 : 125;
+        const damage = player.skills.fists ? 68 : 44;
+        const hitX = player.facing > 0 ? player.x - 20 : player.x + player.w - reach + 20;
+        const hitY = player.y - 28;
+        const hitW = reach;
+        const hitH = player.h + 48;
+
+        createParticles(
+          player.x + (player.facing > 0 ? 70 : -40),
+          player.y + 10,
+          player.skills.fists ? '#fbbf24' : '#38bdf8',
+          26
+        );
+
+        checkAttackHit(hitX, hitY, hitW, hitH, damage, '#38bdf8');
+      }
+    }
+
+    function tryRangedAttack() {
+      if (!player.skills.shot && !player.skills.magic) return;
+      if (player.rangedCooldown <= 0) {
+        const isMagic = player.skills.magic;
+        player.rangedCooldown = isMagic ? 32 : 20;
+        projectiles.push({
+          x: player.x + (player.facing > 0 ? player.w + 6 : -16),
+          y: player.y + 16,
+          vx: player.facing * (isMagic ? 13 : 11),
+          vy: 0,
+          r: isMagic ? 11 : 6,
+          damage: isMagic ? 34 : 18,
+          pierce: isMagic,
+          fromPlayer: true,
+          color: isMagic ? '#c084fc' : '#38bdf8'
+        });
+      }
+    }
+
+    function tryInteract() {
+      // Conversar com a Deusa ("Anjo") no Purgatório
+      const distGoddess = Math.hypot((player.x + player.w / 2) - 660, (player.y + player.h / 2) - 2110);
+      if (distGoddess < 95) {
+        const defeated = (!bosses.heaven.alive ? 1 : 0) + (!bosses.hell.alive ? 1 : 0);
+        if (defeated === 0) {
+          startDialogue([
+            {
+              speaker: 'O "Anjo" Aprisionado (A Deusa)',
+              color: 'text-purple-300',
+              text: '“Suba pelas plataformas douradas para enfrentar os Deuses do Céu, ou desça pelo abismo gótico para caçar os Demônios do Inferno. Você é livre para escolher por onde começar.”'
+            }
+          ]);
+        } else if (defeated === 1) {
+          startDialogue([
+            {
+              speaker: 'O "Anjo" Aprisionado (A Deusa)',
+              color: 'text-purple-300',
+              text: '“Excelente... Sinto as correntes enfraquecerem! Não dê ouvidos às mentiras que esses guardiões dizem antes de morrer. Use sua Essência na Árvore de Habilidades (Tecla T)!”'
+            }
+          ]);
+        } else {
+          startDialogue([
+            {
+              speaker: 'A Deusa (Sorriso Sutil)',
+              color: 'text-amber-300',
+              text: '“Você derrotou ambos os chefes deste protótipo! Sua alma altruísta é a arma perfeita... Em breve, nem o Céu nem o Inferno poderão deter o meu verdadeiro despertar.”'
+            }
+          ]);
+        }
+        return;
+      }
+
+      // Salvar e Curar nos Altares
+      for (const altar of altars) {
+        const d = Math.hypot((player.x + player.w / 2) - altar.x, (player.y + player.h) - altar.y);
+        if (d < 85) {
+          player.hp = player.maxHp;
+          player.saveX = altar.x - player.w / 2;
+          player.saveY = altar.y - player.h;
+          player.saveName = altar.name;
+          document.getElementById('save-name').textContent = altar.name;
+          createParticles(altar.x, altar.y - 20, '#c084fc', 25);
+          return;
+        }
+      }
+    }
+
+    function checkAttackHit(hx, hy, hw, hh, dmg, particleColor) {
+      for (const key of ['heaven', 'hell']) {
+        const b = bosses[key];
+        if (!b.alive) continue;
+        if (
+          hx < b.x + b.w &&
+          hx + hw > b.x &&
+          hy < b.y + b.h &&
+          hy + hh > b.y
+        ) {
+          b.hp = Math.max(0, b.hp - dmg);
+          createParticles(b.x + b.w / 2, b.y + b.h / 2, particleColor, 18);
+          screenShake = Math.max(screenShake, 5);
+          if (b.hp <= 0) {
+            handleBossDefeated(b);
+          }
+        }
+      }
+    }
+
+    function handleBossDefeated(boss) {
+      boss.alive = false;
+      boss.engaged = false;
+      player.skillPoints += 1;
+      player.hp = player.maxHp;
+      screenShake = 20;
+      createParticles(boss.x + boss.w / 2, boss.y + boss.h / 2, '#fbbf24', 60);
+      updateHUD();
+
+      if (boss.id === 'heaven') {
+        startDialogue([
+          {
+            speaker: 'URIEL, O OLHO DO JUÍZO (Derrotado)',
+            color: 'text-amber-300',
+            text: '“Cega... mortal... Aquele ser no Purgatório não é um anjo... Nós construímos estas correntes para proteger a criação dela...”'
+          },
+          {
+            speaker: 'MEMÓRIA DA 2ª GUERRA MUNDIAL — INVERNO DE 1944',
+            color: 'text-sky-300',
+            text: '[FLASHBACK]: A luz cegante de Uriel lembra os holofotes da torre de vigia nazista. Você se lembra de quando destruiu o holofote com suas próprias mãos para que trinta famílias pudessem cruzar a fronteira na neve antes de você ser atingida...'
+          },
+          {
+            speaker: 'SISTEMA DE PROGRESSÃO',
+            color: 'text-emerald-400',
+            text: 'Você absorveu +1 ESSÊNCIA DIVINA! Pressione [T] ou clique no botão superior para abrir a Árvore de Habilidades.'
+          }
+        ]);
+      } else {
+        startDialogue([
+          {
+            speaker: 'MALPHAS, O TRIDENTE DE SANGUE (Derrotado)',
+            color: 'text-rose-400',
+            text: '“Hahaha! Você luta com a fúria de quem quer salvar o mundo... mas está apenas entregando a chave do abismo para a verdadeira Tirana!”'
+          },
+          {
+            speaker: 'MEMÓRIA DA 2ª GUERRA MUNDIAL — RUÍNAS DE VARSÓVIA',
+            color: 'text-sky-300',
+            text: '[FLASHBACK]: A investida brutal de Malphas traz à tona a memória do oficial da SS que encurralou crianças no abrigo subterrâneo. Mesmo ferida, você se colocou entre as baionetas e os inocentes, derrotando o carrasco em seu último suspiro.'
+          },
+          {
+            speaker: 'SISTEMA DE PROGRESSÃO',
+            color: 'text-emerald-400',
+            text: 'Você absorveu +1 ESSÊNCIA DIVINA! Pressione [T] ou clique no botão superior para abrir a Árvore de Habilidades.'
+          }
+        ]);
+      }
+    }
+
+    function damagePlayer(amount, reasonText) {
+      if (player.invulnTime > 0 || dialogueActive) return;
+      player.hp -= amount;
+      player.invulnTime = 45;
+      screenShake = 10;
+      createParticles(player.x + player.w / 2, player.y + player.h / 2, '#f43f5e', 20);
+
+      if (player.hp <= 0) {
+        // Retorna ao último ponto de salvamento (estilo Hollow Knight)
+        player.hp = player.maxHp;
+        player.x = player.saveX;
+        player.y = player.saveY;
+        player.vx = 0;
+        player.vy = 0;
+
+        // Reseta a luta caso o chefe ainda esteja vivo
+        for (const k of ['heaven', 'hell']) {
+          if (bosses[k].alive) {
+            bosses[k].hp = bosses[k].maxHp;
+            bosses[k].engaged = false;
+          }
+        }
+        createParticles(player.x + player.w / 2, player.y + player.h / 2, '#c084fc', 35);
+      }
+    }
+
+    function createParticles(x, y, color, count) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1 + Math.random() * 5;
+        particles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 20 + Math.random() * 20,
+          color
+        });
+      }
+    }
+
+    // Atalhos de Teste Rápido
+    window.teleportTo = function(dest) {
+      player.vx = 0;
+      player.vy = 0;
+      if (dest === 'purgatory') {
+        player.x = 580;
+        player.y = PURGATORY_Y - 60;
+      } else if (dest === 'heaven_boss') {
+        player.x = 300;
+        player.y = 480;
+      } else if (dest === 'hell_boss') {
+        player.x = 300;
+        player.y = 3710;
+      }
+    };
+
+    window.grantTestPoint = function() {
+      player.skillPoints += 1;
+      updateHUD();
+      updateSkillModalUI();
+    };
+
+    window.toggleSkillTree = function() {
+      const modal = document.getElementById('skill-modal');
+      modal.classList.toggle('hidden');
+      updateSkillModalUI();
+    };
+
+    window.unlockSkill = function(skillKey) {
+      if (player.skills[skillKey]) return;
+      if (player.skillPoints <= 0) return;
+      player.skillPoints -= 1;
+      player.skills[skillKey] = true;
+      if (skillKey === 'shot' || skillKey === 'magic') {
+        document.getElementById('ranged-control-hint').classList.remove('hidden');
+      }
+      updateHUD();
+      updateSkillModalUI();
+    };
+
+    function updateSkillModalUI() {
+      document.getElementById('modal-skill-points').textContent = player.skillPoints;
+      const map = [
+        { key: 'shot', btn: 'btn-skill-shot' },
+        { key: 'fists', btn: 'btn-skill-fists' },
+        { key: 'magic', btn: 'btn-skill-magic' },
+        { key: 'wings', btn: 'btn-skill-wings' }
+      ];
+      for (const item of map) {
+        const el = document.getElementById(item.btn);
+        if (player.skills[item.key]) {
+          el.textContent = 'DESBLOQUEADO ✓';
+          el.className = 'mt-4 w-full py-2 rounded-lg bg-zinc-800 text-emerald-400 border border-emerald-700/50 text-xs font-bold cursor-default';
+        } else if (player.skillPoints <= 0) {
+          el.textContent = 'Sem Pontos (Derrote um Chefe)';
+          el.className = 'mt-4 w-full py-2 rounded-lg bg-zinc-800 text-zinc-500 text-xs font-bold cursor-not-allowed';
+        } else {
+          el.textContent = 'Desbloquear Habilidade (1 Ponto)';
+          el.className = 'mt-4 w-full py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition';
+        }
+      }
+    }
+
+    function updateHUD() {
+      document.getElementById('hp-text').textContent = `${Math.max(0, Math.ceil(player.hp))} / ${player.maxHp}`;
+      document.getElementById('hp-bar').style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+
+      const maxSpec = player.skills.fists ? 95 : 150;
+      const readyPct = Math.min(100, Math.max(0, ((maxSpec - player.specialCooldown) / maxSpec) * 100));
+      document.getElementById('special-bar').style.width = `${readyPct}%`;
+      document.getElementById('special-text').textContent = player.specialCooldown <= 0 ? 'PRONTO (K / C)' : 'CARREGANDO...';
+
+      const defeated = (!bosses.heaven.alive ? 1 : 0) + (!bosses.hell.alive ? 1 : 0);
+      document.getElementById('boss-count').textContent = `${defeated} / 2 (Demo)`;
+      document.getElementById('skill-point-badge').textContent = player.skillPoints;
+
+      // Atualiza indicador de Zona (Céu, Purgatório ou Inferno)
+      const badge = document.getElementById('zone-badge');
+      if (player.y < 1720) {
+        badge.textContent = 'Zona: O Céu (Subida / Renascentista)';
+        badge.className = 'px-2.5 py-0.5 rounded-full bg-amber-950 text-amber-200 border border-amber-700 font-semibold';
+      } else if (player.y > 2350) {
+        badge.textContent = 'Zona: O Inferno (Descida / Gótico)';
+        badge.className = 'px-2.5 py-0.5 rounded-full bg-red-950 text-red-200 border border-red-700 font-semibold';
+      } else {
+        badge.textContent = 'Zona: O Purgatório (Centro Seguro)';
+        badge.className = 'px-2.5 py-0.5 rounded-full bg-purple-950 text-purple-200 border border-purple-700 font-semibold';
+      }
+
+      // HUD de Chefe Ativo
+      const bossHud = document.getElementById('boss-hud');
+      let activeBoss = null;
+      if (bosses.heaven.alive && player.y < 620) activeBoss = bosses.heaven;
+      if (bosses.hell.alive && player.y > 3520) activeBoss = bosses.hell;
+
+      if (activeBoss) {
+        bossHud.classList.remove('hidden');
+        document.getElementById('boss-name').textContent = activeBoss.name;
+        document.getElementById('boss-hp-text').textContent = `${Math.ceil(activeBoss.hp)} / ${activeBoss.maxHp}`;
+        document.getElementById('boss-hp-bar').style.width = `${(activeBoss.hp / activeBoss.maxHp) * 100}%`;
+
+        // Diálogo Pré-Chefe na primeira vez que entra na arena
+        if (!activeBoss.introShown && !dialogueActive) {
+          activeBoss.introShown = true;
+          activeBoss.engaged = true;
+          if (activeBoss.id === 'heaven') {
+            startDialogue([
+              {
+                speaker: 'URIEL, O OLHO DO JUÍZO (1º DEUS)',
+                color: 'text-amber-300',
+                text: '“Alma humana da grande guerra... Você carrega os punhos daquela que selamos no Purgatório. Se der mais um passo pelo Céu, será purificada pela luz!”'
+              }
+            ]);
+          } else {
+            startDialogue([
+              {
+                speaker: 'MALPHAS, O TRIDENTE DE SANGUE (1º DEMÔNIO)',
+                color: 'text-rose-400',
+                text: '“Outra marionete da Falsa Anja! Você salvou humanos na guerra apenas para servir de espada para a criatura mais traiçoeira da existência? Venha provar seu valor!”'
+              }
+            ]);
+          }
+        }
+      } else {
+        bossHud.classList.add('hidden');
+      }
+    }
+
+    // ==========================================
+    // LOOP DE FÍSICA E IA DOS CHEFES E OBSTÁCULOS
+    // ==========================================
+    function update() {
+      if (!dialogueActive && document.getElementById('skill-modal').classList.contains('hidden')) {
+        // Movimentação Horizontal
+        if (player.dashTime > 0) {
+          player.dashTime--;
+        } else {
+          const moveLeft = keys['a'] || keys['arrowleft'];
+          const moveRight = keys['d'] || keys['arrowright'];
+          const speed = 5.4;
+
+          if (moveLeft && !moveRight) {
+            player.vx = -speed;
+            player.facing = -1;
+          } else if (moveRight && !moveLeft) {
+            player.vx = speed;
+            player.facing = 1;
+          } else {
+            player.vx *= 0.72;
+          }
+
+          // Gravidade
+          player.vy = Math.min(14, player.vy + 0.58);
+        }
+
+        // Atualiza Timers da Protagonista
+        if (player.dashCooldown > 0) player.dashCooldown--;
+        if (player.invulnTime > 0) player.invulnTime--;
+        if (player.swordTime > 0) player.swordTime--;
+        if (player.swordCooldown > 0) player.swordCooldown--;
+        if (player.specialTime > 0) player.specialTime--;
+        if (player.specialCooldown > 0) player.specialCooldown--;
+        if (player.rangedCooldown > 0) player.rangedCooldown--;
+
+        // Movimento e Colisão Horizontal
+        player.x += player.vx;
+        player.onWall = 0;
+        for (const p of platforms) {
+          if (
+            player.x < p.x + p.w &&
+            player.x + player.w > p.x &&
+            player.y < p.y + p.h &&
+            player.y + player.h > p.y
+          ) {
+            if (player.vx > 0) {
+              player.x = p.x - player.w;
+              player.onWall = 1;
+            } else if (player.vx < 0) {
+              player.x = p.x + p.w;
+              player.onWall = -1;
+            }
+            player.vx = 0;
+          }
+        }
+
+        // Deslizar devagar na parede (Wall Slide)
+        if (player.onWall !== 0 && !player.onGround && player.vy > 2.2) {
+          player.vy = 2.2;
+        }
+
+        // Movimento e Colisão Vertical
+        player.y += player.vy;
+        player.onGround = false;
+        for (const p of platforms) {
+          if (
+            player.x < p.x + p.w &&
+            player.x + player.w > p.x &&
+            player.y < p.y + p.h &&
+            player.y + player.h > p.y
+          ) {
+            if (player.vy > 0) {
+              player.y = p.y - player.h;
+              player.vy = 0;
+              player.onGround = true;
+              player.jumpsLeft = player.skills.wings ? 1 : 0;
+            } else if (player.vy < 0) {
+              player.y = p.y + p.h;
+              player.vy = 0;
+            }
+          }
+        }
+
+        // 1. Obstáculos do Céu: Olhos Angelicais e Disparos de Laser
+        for (const eye of angelicEyes) {
+          eye.timer = (eye.timer + 1) % eye.cycle;
+          // Fase de mira (80 a 130): trava na posição da jogadora
+          if (eye.timer < 115) {
+            eye.aimX += ((player.x + player.w / 2) - eye.aimX) * 0.08;
+            eye.aimY += ((player.y + player.h / 2) - eye.aimY) * 0.08;
+          }
+          // Fase de Disparo do Laser (135 a 160)
+          if (eye.timer >= 135 && eye.timer <= 158) {
+            // Verifica distância da jogadora até a linha do laser caso esteja no Céu
+            if (player.y < 1750 && Math.abs(player.y - eye.y) < 420) {
+              const dist = pointToSegmentDistance(
+                player.x + player.w / 2,
+                player.y + player.h / 2,
+                eye.x,
+                eye.y,
+                eye.aimX,
+                eye.aimY
+              );
+              if (dist < 18) {
+                damagePlayer(20, 'Laser Angelical');
+              }
+            }
+          }
+        }
+
+        // 2. Obstáculos do Inferno: Espinhos de Tridente nas paredes e Lava
+        for (const s of tridentSpikes) {
+          if (
+            player.x < s.x + s.w &&
+            player.x + player.w > s.x &&
+            player.y < s.y + s.h &&
+            player.y + player.h > s.y
+          ) {
+            damagePlayer(25, 'Espinhos de Tridente');
+            player.vy = -9;
+            player.vx = s.side === 'left' ? 8 : s.side === 'right' ? -8 : 0;
+          }
+        }
+
+        if (player.y + player.h > LAVA_Y) {
+          // Cair na lava retorna ao último ponto de salvamento ou causa alto dano
+          damagePlayer(100, 'Lava Abissal');
+        }
+
+        // 3. IA do Chefe do Céu (Uriel)
+        const hb = bosses.heaven;
+        if (hb.alive && player.y < 620) {
+          hb.timer++;
+          hb.x += hb.vx;
+          if (hb.x < 160 || hb.x + hb.w > WORLD_WIDTH - 160) {
+            hb.vx *= -1;
+          }
+          hb.y = 310 + Math.sin(hb.timer * 0.05) * 35;
+
+          // Dispara orbes celestiais e feixe de luz
+          if (hb.timer % 75 === 0) {
+            const angle = Math.atan2((player.y + 20) - (hb.y + 38), (player.x + 14) - (hb.x + 38));
+            for (let spread = -0.25; spread <= 0.25; spread += 0.25) {
+              projectiles.push({
+                x: hb.x + hb.w / 2,
+                y: hb.y + hb.h / 2,
+                vx: Math.cos(angle + spread) * 6.2,
+                vy: Math.sin(angle + spread) * 6.2,
+                r: 8,
+                damage: 18,
+                fromPlayer: false,
+                color: '#fbbf24'
+              });
+            }
+          }
+        }
+
+        // 4. IA do Chefe do Inferno (Malphas)
+        const lb = bosses.hell;
+        if (lb.alive && player.y > 3520) {
+          lb.timer++;
+          if (lb.timer % 95 < 60) {
+            // Persegue a jogadora na arena
+            const dir = player.x > lb.x ? 1 : -1;
+            lb.vx = dir * 3.8;
+          } else if (lb.timer % 95 === 60) {
+            // Investida com Tridente + Pulo
+            const dir = player.x > lb.x ? 1 : -1;
+            lb.vx = dir * 10.5;
+            lb.vy = -10;
+          }
+
+          lb.vy = Math.min(12, lb.vy + 0.55);
+          lb.x = Math.max(130, Math.min(WORLD_WIDTH - 130 - lb.w, lb.x + lb.vx));
+          lb.y += lb.vy;
+          if (lb.y + lb.h >= 3780) {
+            lb.y = 3780 - lb.h;
+            lb.vy = 0;
+          }
+
+          // Colisão de contato com o Chefe do Inferno
+          if (
+            player.x < lb.x + lb.w &&
+            player.x + player.w > lb.x &&
+            player.y < lb.y + lb.h &&
+            player.y + player.h > lb.y
+          ) {
+            damagePlayer(22, 'Investida de Malphas');
+          }
+        }
+
+        // 5. Atualiza Projéteis
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+          const pr = projectiles[i];
+          pr.x += pr.vx;
+          pr.y += pr.vy;
+
+          if (pr.x < 0 || pr.x > WORLD_WIDTH || pr.y < 0 || pr.y > 4200) {
+            projectiles.splice(i, 1);
+            continue;
+          }
+
+          if (pr.fromPlayer) {
+            for (const k of ['heaven', 'hell']) {
+              const b = bosses[k];
+              if (!b.alive) continue;
+              if (pr.x > b.x && pr.x < b.x + b.w && pr.y > b.y && pr.y < b.y + b.h) {
+                b.hp = Math.max(0, b.hp - pr.damage);
+                createParticles(pr.x, pr.y, pr.color, 10);
+                if (b.hp <= 0) handleBossDefeated(b);
+                if (!pr.pierce) {
+                  projectiles.splice(i, 1);
+                  break;
+                }
+              }
+            }
+          } else {
+            if (
+              pr.x > player.x &&
+              pr.x < player.x + player.w &&
+              pr.y > player.y &&
+              pr.y < player.y + player.h
+            ) {
+              damagePlayer(pr.damage, 'Projétil Divino');
+              projectiles.splice(i, 1);
+            }
+          }
+        }
+      }
+
+      // Atualiza partículas
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const pt = particles[i];
+        pt.x += pt.vx;
+        pt.y += pt.vy;
+        pt.life--;
+        if (pt.life <= 0) particles.splice(i, 1);
+      }
+
+      if (screenShake > 0) screenShake *= 0.85;
+      if (screenShake < 0.4) screenShake = 0;
+
+      updateHUD();
+    }
+
+    function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+      const A = px - x1;
+      const B = py - y1;
+      const C = x2 - x1;
+      const D = y2 - y1;
+      const dot = A * C + B * D;
+      const lenSq = C * C + D * D;
+      let param = -1;
+      if (lenSq !== 0) param = dot / lenSq;
+      let xx, yy;
+      if (param < 0) {
+        xx = x1;
+        yy = y1;
+      } else if (param > 1) {
+        xx = x2;
+        yy = y2;
+      } else {
+        xx = x1 + param * C;
+        yy = y1 + param * D;
+      }
+      return Math.hypot(px - xx, py - yy);
+    }
+
+    // ==========================================
+    // RENDERIZAÇÃO (CÉU RENASCENTISTA, PURGATÓRIO ANIME, INFERNO GÓTICO)
+    // ==========================================
+    let camX = 0;
+    let camY = 1800;
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Câmera suave seguindo a protagonista
+      const targetCamX = (player.x + player.w / 2) - canvas.width / 2;
+      const targetCamY = (player.y + player.h / 2) - canvas.height / 2;
+      camX += (targetCamX - camX) * 0.12;
+      camY += (targetCamY - camY) * 0.12;
+
+      const shakeX = (Math.random() - 0.5) * screenShake;
+      const shakeY = (Math.random() - 0.5) * screenShake;
+
+      // Fundo Dinâmico conforme a Altitude (Céu -> Purgatório -> Inferno)
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      if (player.y < 1650) {
+        // Estética Renascentista do Céu (Ouro pálido, marfim e azul celestial tenso)
+        bgGrad.addColorStop(0, '#1e1b2e');
+        bgGrad.addColorStop(0.5, '#3b2f4a');
+        bgGrad.addColorStop(1, '#5c4738');
+      } else if (player.y > 2350) {
+        // Estética Gótica do Inferno (Carmesim profundo e obsidiana)
+        bgGrad.addColorStop(0, '#0f070a');
+        bgGrad.addColorStop(0.6, '#260812');
+        bgGrad.addColorStop(1, '#470a14');
+      } else {
+        // Estética Misteriosa do Purgatório (Violeta nebuloso e cinza)
+        bgGrad.addColorStop(0, '#0c0a14');
+        bgGrad.addColorStop(0.5, '#191429');
+        bgGrad.addColorStop(1, '#110f1a');
+      }
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.translate(-camX + shakeX, -camY + shakeY);
+
+      // Arcos Renascentistas no Céu e Vitrais Góticos no Inferno (Background Art)
+      drawWorldBackdrop();
+
+      // Plataformas
+      for (const p of platforms) {
+        if (p.type === 'wall') {
+          ctx.fillStyle = '#18181b';
+          ctx.fillRect(p.x, p.y, p.w, p.h);
+        } else if (p.type.startsWith('heaven')) {
+          ctx.fillStyle = '#fef3c7';
+          ctx.fillRect(p.x, p.y, p.w, p.h);
+          ctx.strokeStyle = '#d97706';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(p.x, p.y, p.w, p.h);
+        } else if (p.type.startsWith('hell')) {
+          ctx.fillStyle = '#271217';
+          ctx.fillRect(p.x, p.y, p.w, p.h);
+          ctx.strokeStyle = '#9f1239';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(p.x, p.y, p.w, p.h);
+        } else {
+          ctx.fillStyle = '#2e2640';
+          ctx.fillRect(p.x, p.y, p.w, p.h);
+          ctx.strokeStyle = '#a855f7';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(p.x, p.y, p.w, p.h);
+        }
+      }
+
+      // Placas Indicadoras no Purgatório
+      ctx.fillStyle = '#fde68a';
+      ctx.font = 'bold 13px Cinzel, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('↑ SUBIR PARA O CÉU (4 DEUSES)', 600, 1930);
+      ctx.fillStyle = '#fda4af';
+      ctx.fillText('↓ DESCER PARA O INFERNO (4 DEMÔNIOS)', 200, 2240);
+      ctx.fillText('↓ DESCER PARA O INFERNO (4 DEMÔNIOS)', 1000, 2240);
+
+      // Altares de Salvamento
+      for (const altar of altars) {
+        ctx.fillStyle = '#a855f7';
+        ctx.beginPath();
+        ctx.arc(altar.x, altar.y - 18, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#e9d5ff';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.fillText('[E] Altar (Salvar/Curar)', altar.x, altar.y - 40);
+      }
+
+      // A Deusa ("Anjo Aprisionado") no Purgatório
+      drawGoddessNPC(660, 2150);
+
+      // Olhos Angelicais e Lasers no Céu
+      for (const eye of angelicEyes) {
+        // Linha de aviso / Laser ativo
+        if (eye.timer >= 85 && eye.timer < 135) {
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.35)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 6]);
+          ctx.beginPath();
+          ctx.moveTo(eye.x, eye.y);
+          ctx.lineTo(eye.aimX, eye.aimY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (eye.timer >= 135 && eye.timer <= 158) {
+          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = 14;
+          ctx.beginPath();
+          ctx.moveTo(eye.x, eye.y);
+          ctx.lineTo(eye.aimX, eye.aimY);
+          ctx.stroke();
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 24;
+          ctx.globalAlpha = 0.35;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+
+        // Desenho do Olho Angelical com Auréola Renascentista
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(eye.x, eye.y, 22, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fffbeb';
+        ctx.beginPath();
+        ctx.ellipse(eye.x, eye.y, 16, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = eye.timer > 115 ? '#ef4444' : '#d97706';
+        ctx.beginPath();
+        ctx.arc(eye.x, eye.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Espinhos de Tridente nas paredes/pisos do Inferno
+      for (const s of tridentSpikes) {
+        ctx.fillStyle = '#e11d48';
+        ctx.fillRect(s.x, s.y, s.w, s.h);
+        ctx.strokeStyle = '#fecdd3';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(s.x, s.y, s.w, s.h);
+      }
+
+      // Lava no fundo do Inferno
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(40, LAVA_Y, WORLD_WIDTH - 80, 300);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(40, LAVA_Y, WORLD_WIDTH - 80, 8);
+
+      // Desenha os Chefes
+      drawBosses();
+
+      // Desenha a Protagonista e o Duplo Soco Gigante Espectral
+      drawPlayer();
+
+      // Desenha Projéteis e Partículas
+      for (const pr of projectiles) {
+        ctx.fillStyle = pr.color;
+        ctx.beginPath();
+        ctx.arc(pr.x, pr.y, pr.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      for (const pt of particles) {
+        ctx.fillStyle = pt.color;
+        ctx.globalAlpha = Math.max(0, pt.life / 35);
+        ctx.fillRect(pt.x - 2, pt.y - 2, 4, 4);
+      }
+      ctx.globalAlpha = 1;
+
+      ctx.restore();
+
+      requestAnimationFrame(() => {
+        update();
+        draw();
+      });
+    }
+
+    function drawWorldBackdrop() {
+      // Colunas e Auréolas Renascentistas no Céu
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.12)';
+      ctx.lineWidth = 4;
+      for (let y = 400; y < 1700; y += 320) {
+        ctx.beginPath();
+        ctx.arc(600, y, 180, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Arcos Góticos no Inferno
+      ctx.strokeStyle = 'rgba(225, 29, 72, 0.14)';
+      for (let y = 2500; y < 3800; y += 320) {
+        ctx.beginPath();
+        ctx.moveTo(350, y + 140);
+        ctx.lineTo(600, y - 60);
+        ctx.lineTo(850, y + 140);
+        ctx.stroke();
+      }
+    }
+
+    function drawGoddessNPC(x, y) {
+      // Correntes de luz violeta (fingindo estar aprisionada)
+      ctx.strokeStyle = 'rgba(192, 132, 252, 0.45)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - 60, y - 140);
+      ctx.lineTo(x, y - 45);
+      ctx.moveTo(x + 60, y - 140);
+      ctx.lineTo(x, y - 45);
+      ctx.stroke();
+
+      // Silhueta Angelical / Deusa
+      ctx.fillStyle = '#f3e8ff';
+      ctx.fillRect(x - 14, y - 64, 28, 64);
+      ctx.strokeStyle = '#e879f9';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y - 78, 16, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#d8b4fe';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('[E] O "Anjo" (Deusa)', x, y - 102);
+    }
+
+    function drawBosses() {
+      // Chefe do Céu: Uriel
+      const hb = bosses.heaven;
+      if (hb.alive) {
+        ctx.save();
+        ctx.translate(hb.x + hb.w / 2, hb.y + hb.h / 2);
+        // Asas e Anéis Renascentistas Dourados
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, 46, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#fef3c7';
+        ctx.beginPath();
+        ctx.arc(0, 0, 26, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#b45309';
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Chefe do Inferno: Malphas
+      const lb = bosses.hell;
+      if (lb.alive) {
+        ctx.fillStyle = '#be123c';
+        ctx.fillRect(lb.x, lb.y, lb.w, lb.h);
+        // Chifres Góticos e Tridente
+        ctx.strokeStyle = '#fda4af';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(lb.x, lb.y, lb.w, lb.h);
+      }
+    }
+
+    function drawPlayer() {
+      if (player.invulnTime > 0 && Math.floor(player.invulnTime / 3) % 2 === 0) {
+        ctx.globalAlpha = 0.45;
+      }
+
+      const cx = player.x + player.w / 2;
+      const cy = player.y + player.h / 2;
+
+      // Efeito do ATAQUE ESPECIAL: Duplo Soco Gigante saindo das costas da protagonista!
+      if (player.specialTime > 0) {
+        const reach = player.skills.fists ? 140 : 105;
+        const punchX = player.facing > 0 ? cx + 10 : cx - reach - 10;
+        const fistColor = player.skills.fists ? '#fbbf24' : '#38bdf8';
+
+        // Braços espectrais conectando as costas da personagem aos punhos colossais
+        ctx.strokeStyle = fistColor;
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(cx - player.facing * 10, cy - 8);
+        ctx.lineTo(punchX + (player.facing > 0 ? reach - 20 : 20), cy - 18);
+        ctx.moveTo(cx - player.facing * 10, cy + 8);
+        ctx.lineTo(punchX + (player.facing > 0 ? reach - 10 : 10), cy + 16);
+        ctx.stroke();
+
+        // Punho Gigante Superior e Inferior
+        ctx.fillStyle = fistColor;
+        ctx.fillRect(
+          player.facing > 0 ? punchX + reach - 44 : punchX,
+          cy - 36,
+          44,
+          28
+        );
+        ctx.fillRect(
+          player.facing > 0 ? punchX + reach - 36 : punchX - 8,
+          cy + 4,
+          44,
+          28
+        );
+      }
+
+      // Efeito do Corte de Espada Básica
+      if (player.swordTime > 0) {
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        const arcX = player.facing > 0 ? player.x + player.w + 15 : player.x - 15;
+        ctx.arc(
+          arcX,
+          cy,
+          34,
+          player.facing > 0 ? -Math.PI / 2.2 : Math.PI / 2.2,
+          player.facing > 0 ? Math.PI / 2.2 : (Math.PI * 3) / 2.2
+        );
+        ctx.stroke();
+      }
+
+      // Capa / Cachecol estilo Anime esvoaçando atrás da protagonista
+      ctx.fillStyle = '#9333ea';
+      ctx.fillRect(
+        player.facing > 0 ? player.x - 10 : player.x + player.w - 2,
+        player.y + 8,
+        12,
+        26
+      );
+
+      // Corpo da Protagonista
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(player.x, player.y, player.w, player.h);
+
+      // Olhos indicando direção
+      ctx.fillStyle = '#09090b';
+      const eyeX = player.facing > 0 ? player.x + 18 : player.x + 4;
+      ctx.fillRect(eyeX, player.y + 10, 5, 6);
+
+      ctx.globalAlpha = 1;
+    }
+
+    // Inicia o jogo
+    requestAnimationFrame(() => {
+      update();
+      draw();
+    });
+  </script>
+</body>
+</html>
